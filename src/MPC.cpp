@@ -25,7 +25,7 @@ const double Lf = 2.67;
 // or do something completely different
 double ref_cte = 0;
 double ref_epsi = 0;
-double ref_v = 100;
+double ref_v = 70;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -62,8 +62,8 @@ class FG_eval {
     // any anything you think may be beneficial.
     for (int t = 0; t < N; t++)
     {
-      fg[0] += 2000*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 2000*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 3000*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 3000*CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
     
@@ -71,6 +71,9 @@ class FG_eval {
     {
       fg[0] += 5*CppAD::pow(vars[delta_start + t], 2);
       fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
+
+      fg[0] += 700*CppAD::pow(vars[delta_start + t] * vars[v_start+t], 2);
+
     }
     
     for (int t = 0; t < N - 2; t++)
@@ -134,10 +137,10 @@ class FG_eval {
       // epsi[t] = psi[t] - psides[t-1] + v[t-1] * delta[t-1] / Lf * dt
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      fg[1 + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
+      fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta0 * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0/Lf * delta0 * dt);
     }
   }
 };
@@ -253,8 +256,16 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
-  return {solution.x[x_start + 1],   solution.x[y_start + 1],
-    solution.x[psi_start + 1], solution.x[v_start + 1],
-    solution.x[cte_start + 1], solution.x[epsi_start + 1],
-    solution.x[delta_start],   solution.x[a_start]};
+
+  vector<double> result;
+
+  result.push_back(solution.x[delta_start]);
+  result.push_back(solution.x[a_start]);
+
+  for (int i = 0; i < N-1; i++) {
+    result.push_back(solution.x[x_start + i + 1]);
+    result.push_back(solution.x[y_start + i + 1]);
+  }
+
+  return result;
 }
