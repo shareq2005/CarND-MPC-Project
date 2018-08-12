@@ -110,14 +110,15 @@ int main() {
           double * ptry = &ptsy[0];
           Eigen::Map<Eigen::VectorXd> ptsy_transform(ptry,6);
           
-          // polyline of the reference trajectory
+          // fit reference trajectory points and get a matching coefficients 
+          // for a polynomial of order 3
           auto coeffs = polyfit(ptsx_transform, ptsy_transform, 3);
           
           // get the cross track error
           double cte = polyeval(coeffs, 0);
           double epsi = -atan(coeffs[1]);
           
-          // account for delay
+          // account for latency/delay
           const double delay = 0.1; // in seconds
 
           double x0 = 0;
@@ -126,7 +127,7 @@ int main() {
           double cte0 = coeffs[0];
           double epsi0 = -atan(coeffs[1]);
 
-          // use the same equations to account for delay
+          // use the state equations to account for delay
           double x_delay = x0 + ( v * cos(psi0) * delay );
           double y_delay = y0 + ( v * sin(psi0) * delay );
           double psi_delay = psi0 - ( v * delta * delay / Lf );
@@ -198,13 +199,8 @@ int main() {
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
+
           // Latency
-          // The purpose is to mimic real driving conditions where
-          // the car does actuate the commands instantly.
-          //
-          // Feel free to play around with this value but should be to drive
-          // around the track with 100ms latency.
-          //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
           this_thread::sleep_for(chrono::milliseconds(100));

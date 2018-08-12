@@ -47,46 +47,45 @@ class FG_eval {
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
   void operator()(ADvector& fg, const ADvector& vars) {
-    // TODO: implement MPC
-    // `fg` a vector of the cost constraints, `vars` is a vector of variable values (state & actuators)
-    // NOTE: You'll probably go back and forth between this function and
-    // the Solver function below.
-    
+
+    // `fg` a vector of the cost constraints, 
+    // `vars` is a vector of variable values (state & actuators)    
     
     // The cost is stored is the first element of `fg`.
     // Any additions to the cost should be added to `fg[0]`.
     fg[0] = 0;
     
-    // Reference State Cost
-    // TODO: Define the cost related the reference state and
-    // any anything you think may be beneficial.
+    // Reference State Cost - add cost to reduce cte, epsi and
+    // match the refernce velocity
     for (int t = 0; t < N; t++)
     {
-      fg[0] += 1000*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 1000*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 3000*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 3000*CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
-    
+
     for (int t = 0; t < N-1; t++)
     {
-      fg[0] += 50*CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 50*CppAD::pow(vars[a_start + t], 2);
+      // constrain erratic control inputs
+      fg[0] += 5*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
 
-      //fg[0] += 700*CppAD::pow(vars[delta_start + t] * vars[v_start+t], 2);
-
+      // account for the speed and steer, i.e. lower the speed during steep turns
+      fg[0] += 500*CppAD::pow(vars[delta_start + t] * vars[v_start+t], 2);
     }
     
+    // This is to make control decisions more consistent, or smoother. 
+    // The next control input should be similar to the current one.
     for (int t = 0; t < N - 2; t++)
     {
-      fg[0] += 250000*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 5000*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 200*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 10*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
     
     //
     // Setup Constraints
     //
-    // NOTE: In this section you'll setup the model constraints.
-    
+
     // Initial constraints
     //
     // We add 1 to each of the starting indices due to cost being located at
@@ -125,9 +124,6 @@ class FG_eval {
       AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
       AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * CppAD::pow(x0, 2));
 
-      // Here's `x` to get you started.
-      // The idea here is to constraint this value to be 0.
-      //
       // Recall the equations for the model:
       // x_[t] = x[t-1] + v[t-1] * cos(psi[t-1]) * dt
       // y_[t] = y[t-1] + v[t-1] * sin(psi[t-1]) * dt
@@ -194,7 +190,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   
   // The upper and lower limits of delta are set to -25 and 25
   // degrees (values in radians).
-  // NOTE: Feel free to change this to something else.
   for (int i = delta_start; i < a_start; i++) {
     vars_lowerbound[i] = -0.436332 * Lf;
     vars_upperbound[i] = 0.436332 * Lf;
@@ -264,7 +259,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   result.push_back(solution.x[delta_start]);
   result.push_back(solution.x[a_start]);
 
-  for (int i = 0; i < N-1; i++) {
+  for (int i = 0; i < N-2; i++) {
     result.push_back(solution.x[x_start + i + 1]);
     result.push_back(solution.x[y_start + i + 1]);
   }
