@@ -11,7 +11,7 @@
 
 // for convenience
 using json = nlohmann::json;
-
+const double Lf = 2.67;
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
@@ -91,6 +91,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double delta= j[1]["steering_angle"];
+          double a = j[1]["throttle"];
 
           // convert reference trajectory points from map coordinates to car coordinates
           for(int i = 0; i < ptsx.size(); i++)
@@ -115,10 +117,27 @@ int main() {
           double cte = polyeval(coeffs, 0);
           double epsi = -atan(coeffs[1]);
           
+          // account for delay
+          const double delay = 0.1; // in seconds
+
+          double x0 = 0;
+          double y0 = 0;
+          double psi0 = 0;
+          double cte0 = coeffs[0];
+          double epsi0 = -atan(coeffs[1]);
+
+          // use the same equations to account for delay
+          double x_delay = x0 + ( v * cos(psi0) * delay );
+          double y_delay = y0 + ( v * sin(psi0) * delay );
+          double psi_delay = psi0 - ( v * delta * delay / Lf );
+          double v_delay = v + a * delay;
+          double cte_delay = cte0 + ( v * sin(epsi0) * delay );
+          double epsi_delay = epsi0 - ( v * atan(coeffs[1]) * delay / Lf );
+
           // Populate the state
           Eigen::VectorXd state(6);
-          state << 0, 0, 0, v, cte, epsi;
-          
+          state << x_delay, y_delay, psi_delay, v_delay, cte_delay, epsi_delay;
+
           // Call the model predictive controller with the state and coefficient of the
           // reference trajectory
           auto vars = mpc.Solve(state, coeffs);
@@ -127,8 +146,6 @@ int main() {
            * Calculate steering angle and throttle using MPC.
            * Both are in between [-1, 1].
            */
-          double steer_value = vars[0];
-          double throttle_value = vars[1];
           
           //Display the MPC predicted trajectory
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
@@ -157,7 +174,7 @@ int main() {
           const double poly_inc = 2.5;
           
           int num_points = 25;
-          for(int i = 1; i < num_points; i++)
+          for(int i = 0; i < num_points; i++)
           {
             next_x_vals.push_back(poly_inc * i);
             next_y_vals.push_back(polyeval(coeffs, poly_inc * i));
@@ -167,6 +184,8 @@ int main() {
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
+          double steer_value = vars[0];
+          double throttle_value = vars[1];
 
           msgJson["steering_angle"] = steer_value/deg2rad(25);
           msgJson["throttle"] = throttle_value;
